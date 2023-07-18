@@ -3,6 +3,7 @@
 #include <Wire.h>
 
 Adafruit_MPU6050 imu;
+SF sensor_fusion;
 
 #define TEST_POT 36
 
@@ -30,10 +31,15 @@ void loop() {
     sensors_event_t a, g, trash;
     imu.getEvent(&a, &g, &trash);
     (void)trash;
-    Serial.println("Pot\tAX\tAY\tAZ\tGX\tGY\tGZ");
+    sensor_fusion.MahonyUpdate(
+        g.gyro.x, g.gyro.y, g.gyro.z,
+        a.acceleration.x, a.acceleration.y, a.acceleration.z,
+        sensor_fusion.deltatUpdate());
+    Serial.println("Pot\tAX\tAY\tAZ\tGX\tGY\tGZ\tpitch\troll\tyaw");
     Serial.printf(
-        "%i\t%g\t%g\t%g\t%g\t%g\t%g\n",
+        "%i\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g\t%g\n",
         pot_val,
         a.acceleration.x, a.acceleration.y, a.acceleration.z,
-        g.gyro.x, g.gyro.y, g.gyro.z);
+        g.gyro.x, g.gyro.y, g.gyro.z,
+        sensor_fusion.getPitch(), sensor_fusion.getRoll(), sensor_fusion.getYaw());
 }
