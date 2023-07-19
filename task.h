@@ -12,7 +12,7 @@ class Task {
     ul last;
     ul interval;
     bool running;
-    Task(const char* name, ul interval, voidvoid fun, void* arg = NULL)
+    Task(const char* name, ul interval, void* arg, voidvoid fun)
     : name(name),
       interval(interval),
       handler(fun),

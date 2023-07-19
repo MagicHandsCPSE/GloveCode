@@ -13,7 +13,7 @@ LiquidCrystal_PCF8574 lcd(0x27);
 
 #define TEST_POT 36
 
-Task accelTask("accelTask", 0, [](void* arg) -> void {
+Task accelTask("accelTask", 0, NULL, [](void* arg) -> void {
     sensors_event_t a, g, trash;
     imu.getEvent(&a, &g, &trash);
     (void)trash;
@@ -23,7 +23,7 @@ Task accelTask("accelTask", 0, [](void* arg) -> void {
         sensor_fusion.deltatUpdate());
 });
 
-Task testTask("testTask", 500, [](void* arg) -> {
+Task testTask("testTask", 500, NULL, [](void* arg) -> void {
     lcd.clear();
     lcd.home();
     lcd.printf("yaw: %3f", sensor_fusion.getYaw());
