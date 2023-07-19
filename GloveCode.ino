@@ -32,29 +32,23 @@ Task testTask("testTask", 500, [](void* arg) -> {
 TaskManager mgr;
 void setup() {
     Serial.begin(115200);
-    Serial.print("Connecting IMU...         ");
+    // Connect IMU
     if (!imu.begin()) {
-       Serial.println("[ FAIL ]\nFATAL ERROR: IMU disconnected!!");
+       Serial.println("ERROR: IMU disconnected!!");
        ESP.restart();
-    } else
-        Serial.println("[  OK  ]");
-    Serial.print("Starting LCD...           ");
+    }
+    // Start LCD
     lcd.begin(16, 2);
     lcd.setBacklight(255);
-    Serial.println("[  OK  ]");
-    Serial.print("Configuring IMU accel...  ");
+
+    // Configure IMU
     imu.setAccelerometerRange(MPU6050_RANGE_8_G);
-    Serial.println("[  OK  ]");
-    Serial.print("Configuring IMU gyro...   ");
     imu.setGyroRange(MPU6050_RANGE_500_DEG);
-    Serial.println("[  OK  ]");
-    Serial.print("Configuring IMU filter... ");
     imu.setFilterBandwidth(MPU6050_BAND_21_HZ);
-    Serial.println("[  OK  ]");
-    Serial.print("Starting tasks...         ");
+
+    // Setup tasks
     mgr.add(&accelTask);
     mgr.add(&testTask);
-    Serial.println("[  OK  ]");
 }
 
 
