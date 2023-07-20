@@ -3,14 +3,16 @@
 #include <LiquidCrystal_PCF8574.h>
 #include <SensorFusion.h>
 #include <Adafruit_MPU6050.h>
-#include <Wire.h>
-#include <WiFi.h>
+#include <BLEDevice.h>
+#include <BLEUtils.h>
+#include <BLEServer.h>
 #include "task.h"
 
 /////////////////////////////
 // MAKE SURE THESE ARE SAME AS DRONE HAND CODE COPY PASTE
-const char* name = "24f7ad15-fdde-4c83-8327-400a87de818c";
-const char* pass = "9e267cbc-7e40-4d95-be9a-c8f75ba197fa";
+#define DEVICE_NAME         "24f7ad15-fdde-4c83-8327-400a87de818c"
+#define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
+#define THUMB_CHAR_UUID     "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 /////////////////////////////
 
 Adafruit_MPU6050 imu;
@@ -20,6 +22,7 @@ LiquidCrystal_PCF8574 lcd(0x27);
 
 #define TEST_POT 36
 
+BLECharacteristic* thumbChar;
 
 
 Task accelTask("accelTask", 0, NULL, [](void* arg) -> void {
@@ -42,42 +45,27 @@ Task sendThumbTask("sendThumbTask", 100, NULL, [](void* arg) -> void {
     lcd.setCursor(0, 1);
 
     // Send it
-    WiFiClient client;
-    bool connected = client.connect("foo.com", 80); // any domain will do as long as it's port 80
-    if (!connected) {
-        lcd.print("disconnected!");
-        return;
-    }
-    client.printf("thumb=%i\n", thumbPos);
-    lcd.print("> ");
-    lcd.print(client.readStringUntil('\n'));
-    client.stop();
+    thumbChar->setValue(thumbPos);
+    thumbChar->notify();
 });
 
-void connectToWifi() {
-    lcd.clear();
-    lcd.home();
-    lcd.print("Connect to hand");
-    lcd.setCursor(0, 1);
-    WiFi.begin(name, pass);
-    int x = 0;
-    while (WiFi.status() != WL_CONNECTED && x <= 16) {
-        delay(1000);
-        lcd.print(".");
-        x++;
-    }
-    if (x > 16) {
-        lcd.clear();
-        lcd.home();
-        lcd.print("Failed to");
-        lcd.setCursor(0, 1);
-        lcd.print("connect");
-        for(;;)yield();
-    }
-    lcd.clear();
-    lcd.home();
-    lcd.print("connect ok");
-    delay(100);
+void setupBLE() {
+    BLEDevice::init(DEVICE_NAME);
+    BLEServer* server = BLEDevice::createServer();
+    BLEService* service = server->createService(SERVICE_UUID);
+    thumbChar = service->createCharacteristic(
+                    THUMB_CHAR_UUID,
+                    BLECharacteristic::PROPERTY_READ |
+                    BLECharacteristic::PROPERTY_WRITE |
+                    BLECharacteristic::PROPERTY_NOTIFY
+                );
+    service->start();
+    BLEAdvertising* ad = BLEDevice::getAdvertising();
+    ad->addServiceUUID(SERVICE_UUID);
+    ad->setScanResponse(true);
+    ad->setMinPreferred(0x06);  
+    ad->setMaxPreferred(0x12);
+    BLEDevice::startAdvertising();
 }
 
 TaskManager mgr;
@@ -95,7 +83,7 @@ void setup() {
     imu.setGyroRange(MPU6050_RANGE_500_DEG);
     imu.setFilterBandwidth(MPU6050_BAND_21_HZ);
 
-    connectToWifi();
+    setupBLE();
 
     // Setup tasks
     mgr.add(&accelTask);
