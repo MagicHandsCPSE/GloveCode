@@ -12,7 +12,7 @@
 // MAKE SURE THESE ARE SAME AS DRONE HAND CODE COPY PASTE
 #define DEVICE_NAME         "24f7ad15-fdde-4c83-8327-400a87de818c"
 #define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
-#define THUMB_CHAR_UUID     "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+#define SERVO_CHAR_UUID     "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 /////////////////////////////
 
 Adafruit_MPU6050 imu;
@@ -22,7 +22,7 @@ LiquidCrystal_PCF8574 lcd(0x27);
 
 #define TEST_POT 36
 
-BLECharacteristic* thumbChar;
+BLECharacteristic* servoChar;
 
 
 Task accelTask("accelTask", 0, NULL, [](void* arg) -> void {
@@ -35,26 +35,26 @@ Task accelTask("accelTask", 0, NULL, [](void* arg) -> void {
         sensor_fusion.deltatUpdate());
 });
 
-Task sendThumbTask("sendThumbTask", 100, NULL, [](void* arg) -> void {
+Task sendservoTask("sendservoTask", 100, NULL, [](void* arg) -> void {
     lcd.clear();
     lcd.home();
-    int thumbPos = analogRead(TEST_POT);
-    thumbPos = map(thumbPos, 0, 4095, 0, 180);
-    lcd.printf("thumb: %i", thumbPos);
+    int servoPos = analogRead(TEST_POT);
+    servoPos = map(servoPos, 0, 4095, 0, 180);
+    lcd.printf("servo: %i", servoPos);
     // prepare for sending OK
     lcd.setCursor(0, 1);
 
     // Send it
-    thumbChar->setValue(thumbPos);
-    thumbChar->notify();
+    servoChar->setValue(servoPos);
+    servoChar->notify();
 });
 
 void setupBLE() {
     BLEDevice::init(DEVICE_NAME);
     BLEServer* server = BLEDevice::createServer();
     BLEService* service = server->createService(SERVICE_UUID);
-    thumbChar = service->createCharacteristic(
-                    THUMB_CHAR_UUID,
+    servoChar = service->createCharacteristic(
+                    SERVO_CHAR_UUID,
                     BLECharacteristic::PROPERTY_READ |
                     BLECharacteristic::PROPERTY_WRITE |
                     BLECharacteristic::PROPERTY_NOTIFY
@@ -87,7 +87,7 @@ void setup() {
 
     // Setup tasks
     mgr.add(&accelTask);
-    mgr.add(&sendThumbTask);
+    mgr.add(&sendservoTask);
 }
 
 
