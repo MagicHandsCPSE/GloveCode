@@ -1,5 +1,4 @@
 #include <Arduino.h>
-#include <vector>
 
 typedef unsigned long ul;
 typedef void (*voidvoid)(void*);
@@ -32,17 +31,5 @@ class Task {
         } else {
             if (debug) Serial.printf("%s task is waiting\n", this->name);
         }
-    }
-};
-
-class TaskManager {
-    std::vector<Task*> tasks;
-    public:
-    TaskManager() {}
-    void add(Task* task) {
-        this->tasks.push_back(task);
-    }
-    void run_all(bool debug = false) {
-        for (Task* t : this->tasks) t->run(debug);
     }
 };
