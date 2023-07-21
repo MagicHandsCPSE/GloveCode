@@ -8,11 +8,11 @@
 
 /////////////////////////////
 // MAKE SURE THESE ARE SAME AS DRONE HAND CODE COPY PASTE
-#define DEVICE_NAME         "24f7ad15-fdde-4c83-8327-400a87de818c"
-#define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
-#define SERVO1_CHAR_UUID    "beb5483e-36e1-4688-b7f5-ea07361b26a8"
-#define SERVO2_CHAR_UUID    "beb5483e-36e1-4688-b7f5-ea07361b26a8"
-#define SERVO3_CHAR_UUID    "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+#define DEVICE_NAME         "6a2017c6-d018-4930-8d1a-913289dfebf7"
+#define SERVICE_UUID        "778f40a1-2937-4639-a10b-e0c112b04b0e"
+#define SERVO1_CHAR_UUID    "086bf84b-736f-45e0-8e35-6adcd6cc0ec4"
+#define SERVO2_CHAR_UUID    "f676b321-31a8-4179-8640-ce5699cf0721"
+#define SERVO3_CHAR_UUID    "c0b627e5-c0ce-4b5f-b590-a096c3514db7"
 /////////////////////////////
 
 static BLEUUID serviceUUID(SERVICE_UUID);
