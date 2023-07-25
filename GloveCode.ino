@@ -97,6 +97,10 @@ Task sendservoTask("sendservoTask", 100, NULL, [](void* arg) -> void {
     servo1Characteristic->writeValue(val);
     servo2Characteristic->writeValue(val);
     servo3Characteristic->writeValue(val);
+    lcd.setCursor(0, 1);
+    lcd.print("                ");
+    lcd.setCursor(0, 1);
+    lcd.printf("pos: %hhu", val);
 });
 
 void startScan() {
@@ -126,11 +130,11 @@ void setup() {
 }
 
 void loop() {
-    sendservoTask.run();
     accelTask.run();
     if (oktoconnect && !connected) {
         connected = connect();
         sendservoTask.running = connected;
     }
+    sendservoTask.run();
     yield();
 }
