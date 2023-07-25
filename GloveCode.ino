@@ -5,6 +5,8 @@
 #include <Adafruit_MPU6050.h>
 #include <BLEDevice.h>
 #include "task.h"
+#include "filter.h"
+#include "oic.h"
 
 /////////////////////////////
 // MAKE SURE THESE ARE SAME AS DRONE HAND CODE COPY PASTE
@@ -29,7 +31,9 @@ SF sensor_fusion;
 
 LiquidCrystal_PCF8574 lcd(0x27);
 
-#define TEST_POT 36
+#define FLEX1 36
+#define FLEX2 39
+#define FLEX3 34
 
 bool oktoconnect = false;
 bool connected = false;
@@ -90,17 +94,17 @@ Task accelTask("accelTask", 0, NULL, [](void* arg) -> void {
 });
 
 Task sendservoTask("sendservoTask", 100, NULL, [](void* arg) -> void {
-    int servoPos = analogRead(TEST_POT);
-    servoPos = map(servoPos, 0, 4095, 0, 180);
-    // TODO add read code
-    uint8_t val = (uint8_t) servoPos;
-    servo1Characteristic->writeValue(val);
-    servo2Characteristic->writeValue(val);
-    servo3Characteristic->writeValue(val);
+    uint8_t pos1 = map(analogRead(FLEX1), 0, 4095, 0, 180);
+    uint8_t pos2 = map(analogRead(FLEX2), 0, 4095, 0, 180);
+    uint8_t pos3 = map(analogRead(FLEX3), 0, 4095, 0, 180);
+    // TODO add filter code
+    servo1Characteristic->writeValue(pos1);
+    servo2Characteristic->writeValue(pos2);
+    servo3Characteristic->writeValue(pos3);
     lcd.setCursor(0, 1);
     lcd.print("                ");
     lcd.setCursor(0, 1);
-    lcd.printf("pos: %hhu", val);
+    lcd.printf("%3hhu %3hhu %3hhu", pos1, pos2, pos3);
 });
 
 void startScan() {
