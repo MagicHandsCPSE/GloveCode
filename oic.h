@@ -1,16 +1,17 @@
 #include <Arduino.h>
 
-template <typename T>
-class OnlyIfChange {
-    T last = 0;
-    const T threshold;
+template <int8_t T, int D>
+class OIC {
+    uint8_t last = 0;
+    unsigned long lastMove = 0;
     public:
-    OnlyIfChange(T threshold) : threshold(threshold) {}
-    bool didChange(T val) {
-        if (abs(val - this->last) > this->threshold) {
+    OIC() {}
+    bool didChange(uint8_t val) {
+        if (abs(val - this->last) > T) {
             this->last = val;
+            this->lastMove = millis();
             return true;
         }
-        return false;
+        return millis() - this->lastMove < D;
     }
 };

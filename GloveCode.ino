@@ -1,4 +1,4 @@
-// https://github.com/tinkersprojects/LCD-Simple-Menu-Library
+//
 
 #include <LiquidCrystal_PCF8574.h>
 #include <SensorFusion.h>
@@ -37,7 +37,7 @@ LiquidCrystal_PCF8574 lcd(0x27);
 
 bool oktoconnect = false;
 bool connected = false;
-class freezeOnDisconnect : public BLEClientCallbacks {
+class whenDisconnect : public BLEClientCallbacks {
     void onConnect(BLEClient* _) {
     }
     void onDisconnect(BLEClient* _) {
@@ -50,7 +50,7 @@ bool connect() {
     lcd.home();
     lcd.print("connecting...");
     BLEClient* client = BLEDevice::createClient();
-    client->setClientCallbacks(new freezeOnDisconnect());
+    client->setClientCallbacks(new whenDisconnect());
     client->connect(glove);
     client->setMTU(517); // maximum
     BLERemoteService* service = client->getService(serviceUUID);
@@ -93,14 +93,25 @@ Task accelTask("accelTask", 0, NULL, [](void* arg) -> void {
         sensor_fusion.deltatUpdate());
 });
 
-Task sendservoTask("sendservoTask", 100, NULL, [](void* arg) -> void {
-    uint8_t pos1 = map(analogRead(FLEX1), 0, 4095, 0, 180);
-    uint8_t pos2 = map(analogRead(FLEX2), 0, 4095, 0, 180);
-    uint8_t pos3 = map(analogRead(FLEX3), 0, 4095, 0, 180);
-    // TODO add filter code
-    servo1Characteristic->writeValue(pos1);
-    servo2Characteristic->writeValue(pos2);
-    servo3Characteristic->writeValue(pos3);
+Task sendservoTask("sendservoTask", 5, NULL, [](void* arg) -> void {
+    // TODO: make this more DRY
+    uint16_t analog1 = analogRead(FLEX1);
+    uint16_t analog2 = analogRead(FLEX2);
+    uint16_t analog3 = analogRead(FLEX3);
+    static LPF<16> filt1;
+    static LPF<16> filt2;
+    static LPF<16> filt3;
+    uint8_t pos1 = map(filt1.filter(analog1), 0, 4095, 0, 180);
+    uint8_t pos2 = map(filt2.filter(analog2), 0, 4095, 0, 180);
+    uint8_t pos3 = map(filt3.filter(analog3), 0, 4095, 0, 180);
+    static OIC<8, 100> oic1;
+    static OIC<8, 100> oic2;
+    static OIC<8, 100> oic3;
+    bool c = false;
+    if (oic1.didChange(pos1)) servo1Characteristic->writeValue(pos1), c = true;
+    if (oic2.didChange(pos2)) servo2Characteristic->writeValue(pos2), c = true;
+    if (oic3.didChange(pos3)) servo3Characteristic->writeValue(pos3), c = true;
+    if (!c) return;
     lcd.setCursor(0, 1);
     lcd.print("                ");
     lcd.setCursor(0, 1);
@@ -108,6 +119,9 @@ Task sendservoTask("sendservoTask", 100, NULL, [](void* arg) -> void {
 });
 
 void startScan() {
+    lcd.clear();
+    lcd.home();
+    lcd.print("scanning...");
     BLEDevice::init("");
     BLEScan* scan = BLEDevice::getScan();
     scan->setAdvertisedDeviceCallbacks(new chooseWithService());

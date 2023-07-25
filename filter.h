@@ -1,11 +1,11 @@
 template <int N>
 class LPF {
-    int values[N] = {0};
-    long sum = 0;
-    unsigned int pos = 0;
+    uint16_t values[N] = {0};
+    uint32_t sum = 0;
+    uint8_t pos = 0;
     public:
     LPF() {}
-    int filter(int val) {
+    uint16_t filter(uint16_t val) {
         this->sum += val - this->values[this->pos];
         this->values[this->pos] = val;
         this->pos = (this->pos + 1) % N;
