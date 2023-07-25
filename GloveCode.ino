@@ -1,5 +1,3 @@
-//
-
 #include <LiquidCrystal_PCF8574.h>
 #include <SensorFusion.h>
 #include <Adafruit_MPU6050.h>
@@ -7,6 +5,7 @@
 #include "task.h"
 #include "filter.h"
 #include "oic.h"
+#include "screen.h"
 
 /////////////////////////////
 // MAKE SURE THESE ARE SAME AS DRONE HAND CODE COPY PASTE
@@ -30,6 +29,7 @@ Adafruit_MPU6050 imu;
 SF sensor_fusion;
 
 LiquidCrystal_PCF8574 lcd(0x27);
+Screen screen(&lcd);
 
 #define FLEX1 36
 #define FLEX2 39
@@ -42,13 +42,12 @@ class whenDisconnect : public BLEClientCallbacks {
     }
     void onDisconnect(BLEClient* _) {
         connected = false;
+        screen.set_conn_status(SCANNING);
     }
 };
 
 bool connect() {
-    lcd.clear();
-    lcd.home();
-    lcd.print("connecting...");
+    screen.set_conn_status(CONNECTING);
     BLEClient* client = BLEDevice::createClient();
     client->setClientCallbacks(new whenDisconnect());
     client->connect(glove);
@@ -61,15 +60,11 @@ bool connect() {
     if (servo1Characteristic == NULL) goto error;
     if (servo2Characteristic == NULL) goto error;
     if (servo3Characteristic == NULL) goto error;
-    lcd.clear();
-    lcd.home();
-    lcd.print("connected!");
+    screen.set_conn_status(CONNECTED);
     return true;
 error:
     client->disconnect();
-    lcd.clear();
-    lcd.home();
-    lcd.print("error");
+    screen.set_conn_status(ERROR);
     return false;
 }
 
@@ -107,34 +102,26 @@ Task sendservoTask("sendservoTask", 5, NULL, [](void* arg) -> void {
     static OIC<8, 100> oic1;
     static OIC<8, 100> oic2;
     static OIC<8, 100> oic3;
-    bool c = false;
-    if (oic1.didChange(pos1)) servo1Characteristic->writeValue(pos1), c = true;
-    if (oic2.didChange(pos2)) servo2Characteristic->writeValue(pos2), c = true;
-    if (oic3.didChange(pos3)) servo3Characteristic->writeValue(pos3), c = true;
-    if (!c) return;
-    lcd.setCursor(0, 1);
-    lcd.print("                ");
-    lcd.setCursor(0, 1);
-    lcd.printf("%3hhu %3hhu %3hhu", pos1, pos2, pos3);
+    if (oic1.didChange(pos1)) servo1Characteristic->writeValue(pos1);
+    if (oic2.didChange(pos2)) servo2Characteristic->writeValue(pos2);
+    if (oic3.didChange(pos3)) servo3Characteristic->writeValue(pos3);
 });
 
 void startScan() {
-    lcd.clear();
-    lcd.home();
-    lcd.print("scanning...");
+    screen.set_conn_status(SCANNING);
     BLEDevice::init("");
     BLEScan* scan = BLEDevice::getScan();
     scan->setAdvertisedDeviceCallbacks(new chooseWithService());
     scan->setInterval(1349);
     scan->setWindow(449);
     scan->setActiveScan(true);
-    scan->start(9999, false);
+    scan->start(10, false);
 }
 
 void setup() {
     // Connect IMU
     imu.begin();
-    
+
     // Start LCD
     lcd.begin(16, 2);
     lcd.setBacklight(255);
@@ -149,6 +136,7 @@ void setup() {
 
 void loop() {
     accelTask.run();
+    screen.blinky_status();
     if (oktoconnect && !connected) {
         connected = connect();
         sendservoTask.running = connected;

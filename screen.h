@@ -1,7 +1,5 @@
 #include <LiquidCrystal_PCF8574.h>
 
-//LiquidCrystal_PCF8574 lcd(0x27);
-
 const char* calib_options = {
     "Accelerometer",
     "Thumb OPEN",
@@ -13,7 +11,7 @@ const char* calib_options = {
 }
 const size_t num_options = sizeof(calib_options) / sizeof(calib_options[0]);
 
-enum bt_status { SCANNING, CONNECTING, CONNECTED }
+enum bt_status { SCANNING, CONNECTING, CONNECTED, ERROR }
 
 class Screen {
     bool onHome = true;
@@ -42,6 +40,10 @@ class Screen {
             this->lcd.print("Glove: ???%");
             this->set_d_battery(this->d_battery);
             this->set_g_battery(this->g_battery);
+            this->blinky_status();
+        } else {
+            this->lcd.print("Calibration");
+            this->scroll(0);
         }
     }
 
@@ -61,6 +63,27 @@ class Screen {
             else this->lcd.print("???%");
         }
     }
-    
-    
+
+    void set_conn_status(bt_status s) {
+        this->bt_status = s;
+    }
+
+    void blinky_status() {
+        if (!this->onHome) return;
+        this->lcd.setCursor(13, 0);
+        switch (this->bt_status) {
+            case CONNECTED:
+                this->lcd.print("B<>");
+                break;
+            case ERROR:
+                this->lcd.print("B?!");
+                break;
+            case CONNECTING:
+                this->lcd.printf("B%c ", ((millis() % 1000) < 500) ? '<' : ' ');
+                break;
+            case SCANNING:
+                this->lcd.printf("%c  ", ((millis() % 1000) < 500) ? '<' : ' ');
+                break;
+        }
+    }
 };
