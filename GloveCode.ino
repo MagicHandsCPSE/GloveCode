@@ -2,10 +2,13 @@
 #include <SensorFusion.h>
 #include <Adafruit_MPU6050.h>
 #include <BLEDevice.h>
+#include <ESP32Encoder.h>
+#include <Bounce2.h>
 #include "task.h"
 #include "filter.h"
 #include "oic.h"
 #include "screen.h"
+#include "calibrate.h"
 
 /////////////////////////////
 // MAKE SURE THESE ARE SAME AS DRONE HAND CODE COPY PASTE
@@ -31,10 +34,19 @@ SF sensor_fusion;
 LiquidCrystal_PCF8574 lcd(0x27);
 Screen screen(&lcd);
 
+ESP32Encoder selector;
+#define ENC1 35
+#define ENC2 32
+Bounce select_btn;
+Bounce back;
+#define ENC_SELECT 33
+#define ENC_BACK 25
+
 #define FLEX1 36
 #define FLEX2 39
 #define FLEX3 34
 
+void startScan();
 bool oktoconnect = false;
 bool connected = false;
 class whenDisconnect : public BLEClientCallbacks {
@@ -42,11 +54,16 @@ class whenDisconnect : public BLEClientCallbacks {
     }
     void onDisconnect(BLEClient* _) {
         connected = false;
+        oktoconnect = false;
+        delete glove;
+        glove = NULL;
         screen.set_conn_status(SCANNING);
+        startScan();
     }
 };
 
 bool connect() {
+    Serial.println("called connect()");
     screen.set_conn_status(CONNECTING);
     BLEClient* client = BLEDevice::createClient();
     client->setClientCallbacks(new whenDisconnect());
@@ -88,17 +105,36 @@ Task accelTask("accelTask", 0, NULL, [](void* arg) -> void {
         sensor_fusion.deltatUpdate());
 });
 
+Task nav_calibrate_task("nav", 50, NULL, [](void* arg) -> void {
+    select_btn.update();
+    back.update();
+    if (screen.is_home()) { // Don't do calibration or scroll on home screen
+        if (select_btn.fell()) screen.switchScreen(false);
+        return; 
+    }
+    if (select_btn.fell()) { screen.switchScreen(true); return; }
+    int change = selector.getCount();
+    selector.clearCount();
+    if (change > 0) screen.scroll(1);
+    else if (change < 0) screen.scroll(-1);
+    if (back.fell()) {
+        // do calibration
+        Serial.printf("Calibrate %s here\n", calib_options[screen.get_calibrate_option()]);
+        do_calibrate(screen.get_calibrate_option());
+    }
+});
+
 Task sendservoTask("sendservoTask", 5, NULL, [](void* arg) -> void {
     // TODO: make this more DRY
     uint16_t analog1 = analogRead(FLEX1);
     uint16_t analog2 = analogRead(FLEX2);
     uint16_t analog3 = analogRead(FLEX3);
-    static LPF<16> filt1;
-    static LPF<16> filt2;
-    static LPF<16> filt3;
-    uint8_t pos1 = map(filt1.filter(analog1), 0, 4095, 0, 180);
-    uint8_t pos2 = map(filt2.filter(analog2), 0, 4095, 0, 180);
-    uint8_t pos3 = map(filt3.filter(analog3), 0, 4095, 0, 180);
+    static LPF<32> filt1;
+    static LPF<32> filt2;
+    static LPF<32> filt3;
+    uint8_t pos1 = map(filt1.filter(analog1), get_calibrate(CALIB_THUMB_LO), get_calibrate(CALIB_THUMB_HI), 0, 180);
+    uint8_t pos2 = map(filt2.filter(analog2), get_calibrate(CALIB_INDEX_LO), get_calibrate(CALIB_INDEX_HI), 0, 180);
+    uint8_t pos3 = map(filt3.filter(analog3), get_calibrate(CALIB_MIDDLE_LO), get_calibrate(CALIB_MIDDLE_HI), 0, 180);
     static OIC<8, 100> oic1;
     static OIC<8, 100> oic2;
     static OIC<8, 100> oic3;
@@ -119,12 +155,22 @@ void startScan() {
 }
 
 void setup() {
+    Serial.begin(115200);
     // Connect IMU
     imu.begin();
+
+    
+    selector.attachSingleEdge(ENC1, ENC2);
+    selector.setFilter(1023);
+    select_btn.attach(ENC_SELECT, INPUT);
+    back.attach(ENC_BACK, INPUT);
+    select_btn.interval(50);
+    back.interval(50);
 
     // Start LCD
     lcd.begin(16, 2);
     lcd.setBacklight(255);
+    screen.begin();
 
     // Configure IMU
     imu.setAccelerometerRange(MPU6050_RANGE_8_G);
@@ -132,10 +178,15 @@ void setup() {
     imu.setFilterBandwidth(MPU6050_BAND_21_HZ);
 
     startScan();
+
+    sendservoTask.running = false; // Prevent segfault on first round
+
+    setup_calibrate(FLEX1, FLEX2, FLEX3, &imu);
 }
 
 void loop() {
     accelTask.run();
+    nav_calibrate_task.run();
     screen.blinky_status();
     if (oktoconnect && !connected) {
         connected = connect();
