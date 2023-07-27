@@ -1,3 +1,6 @@
+#ifndef OIC_H
+#define OIC_H
+
 #include <Arduino.h>
 
 template <int8_t T, int D>
@@ -15,3 +18,5 @@ class OIC {
         return millis() - this->lastMove < D;
     }
 };
+
+#endif

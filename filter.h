@@ -1,3 +1,6 @@
+#ifndef FILTER_H
+#define FILTER_H
+
 template <int N>
 class LPF {
     uint16_t values[N] = {0};
@@ -12,3 +15,5 @@ class LPF {
         return this->sum / N;
     }
 };
+
+#endif

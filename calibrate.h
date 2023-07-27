@@ -1,3 +1,7 @@
+#ifndef CALIBRATE_H
+#define CALIBRATE_H
+
+
 #include <Arduino.h>
 #include <Adafruit_MPU6050.h>
 #include <Preferences.h>
@@ -20,7 +24,7 @@ const char* calib_keys[] = {
 #define CALIB_INDEX_HI 4
 #define CALIB_MIDDLE_LO 5
 #define CALIB_MIDDLE_HI 6
-const size_t num_keys = sizeof(calib_options) / sizeof(calib_options[0]);
+const size_t num_keys = sizeof(calib_keys) / sizeof(calib_keys[0]);
 int fast_calib_values[] = {
     -1,
     0,
@@ -65,3 +69,5 @@ void do_calibrate(int what) {
 int get_calibrate(int what) {
     return fast_calib_values[what];
 }
+
+#endif
