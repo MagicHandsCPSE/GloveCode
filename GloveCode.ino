@@ -42,11 +42,12 @@ Adafruit_MPU6050 imu;
 SF sensor_fusion;
 
 Adafruit_SSD1306 display(128, 32, &SPI, OLED_DC, OLED_RESET, OLED_CS);
-Screen screen(&display);
+ScreenManager screens(&display);
 
 ESP32Encoder selector;
 Bounce select_btn;
 Bounce back;
+Bounce forward;
 
 SFE_MAX1704X battery(MAX1704X_MAX17048);
 
@@ -149,12 +150,50 @@ TaskHandle_t btTaskHandle;
 
 void runBtTask(void* arg) {
     startScan();
-    for (;;) btTask->run();
+    for (;;) {
+        btTask->run();
+        yield();
+    }
 }
 void startBtTask() {
     sendservoTask->running = false;
     xTaskCreatePinnedToCore(runBtTask, "bluetoothTaskLoop", 8192, NULL, 0, &btTaskHandle, 0);
 }
+
+class CalibrateDoScreen: public CalibrateScreen {
+    public:
+    void button() override {
+        Serial.printf("Calibrate %s here\n", calib_options[this->calibrate_option]);
+        do_calibrate(this->calibrate_option);
+    }
+};
+
+bool hold = false;
+class HomeScreenActions: public HomeScreen {
+    public:
+    void button() override {
+        hold = !hold;
+        Serial.printf("Button on home screen, hold=%s (no actions)\n", hold ? "ON" : "OFF");
+    }
+    void up() override {
+        Serial.println("Up on home screen");
+    }
+    void down() override {
+        Serial.println("Down on home screen");
+    }
+    void drawMore() override {
+        // Draw bars to represent the servo positions
+        display.drawFastHLine(0, 25, map(pos1, 0, 180, 0, 24));
+        display.drawFastHLine(0, 26, map(pos2, 0, 180, 0, 24));
+        display.drawFastHLine(0, 27, map(pos3, 0, 180, 0, 24));
+        // Display "HOLD" if on hold
+        if (!this->hold) return;
+        display.setTextColor(SSD1306_BLACK, SSD1306_WHITE);
+        display.setTextSize(2);
+        display.setCursor(26, 24);
+        display.print("HOLD");
+    }
+};
 
 void setup() {
     btTask = new Task("bluetooth", 0, NULL, [](void* arg) -> void {
@@ -164,7 +203,7 @@ void setup() {
             btTask->running = !connected;
         }
     });
-    
+
     accelTask = new Task("accelTask", 0, NULL, [](void* arg) -> void {
         sensors_event_t a, g, trash;
         imu.getEvent(&a, &g, &trash);
@@ -174,37 +213,26 @@ void setup() {
             a.acceleration.x, a.acceleration.y, a.acceleration.z,
             sensor_fusion.deltatUpdate());
     });
-    
+
     nav_calibrate_task = new Task("nav", 50, NULL, [](void* arg) -> void {
         select_btn.update();
         back.update();
-        if (screen.is_home()) { // Don't do calibration or scroll on home screen
-            if (select_btn.fell()) screen.switchScreen(false);
-            return; 
-        }
-        if (select_btn.fell()) { screen.switchScreen(true); return; }
+        forward.update();
         int change = selector.getCount();
         selector.clearCount();
-        if (change > 0) screen.scroll(1);
-        else if (change < 0) screen.scroll(-1);
-        if (back.fell()) {
-            // do calibration
-            Serial.printf("Calibrate %s here\n", calib_options[screen.get_calibrate_option()]);
-            do_calibrate(screen.get_calibrate_option());
-        }
+        if (change > 0) screens.up();
+        else if (change < 0) screens.down();
+        if (back.fell()) screens.prevScreen();
+        if (forward.fell()) screens.nextScreen();
+        if (select_btn.fell()) screens.button();
     });
 
     draw_task = new Task("draw", 0, NULL, [](void* arg) -> void {
-        display.clearDisplay();
-        screen.redraw();
-        if (screen.is_home()) {
-            display.setCursor(0, 24);
-            display.printf("%3i %3i %3i", pos1, pos2, pos3);
-        }
-        display.display();
+        screens.draw();
     });
-    
+
     sendservoTask = new Task("sendservoTask", 5, NULL, [](void* arg) -> void {
+        if (hold) return;
         // TODO: make this more DRY
         uint16_t analog1 = analogRead(FLEX1);
         uint16_t analog2 = analogRead(FLEX2);
@@ -235,6 +263,7 @@ void setup() {
     bool has_battery = battery.begin();
     battery_task->running = has_battery;
     if (has_battery) {
+        battery.reset();
         battery.quickStart();
     } else {
         screen.set_g_battery(-2);
@@ -243,14 +272,18 @@ void setup() {
     selector.attachSingleEdge(ENC1, ENC2);
     selector.setFilter(1023);
     select_btn.attach(ENC_SELECT, INPUT);
-    back.attach(ENC_BACK, INPUT);
+    back.attach(BTN_BACK, INPUT);
+    forward.attach(BTN_FORWARD, INPUT);
     select_btn.interval(50);
     back.interval(50);
+    forward.interval(50);
 
     // Start LCD
     display.begin(SSD1306_SWITCHCAPVCC);
     display.display();
-    screen.begin();
+    screens.addScreen(new HomeScreenActions(&screens));
+    screens.addScreen(new CalibrateDoScreen(&screens));
+    screens.begin();
 
     // Configure IMU
     imu.setAccelerometerRange(MPU6050_RANGE_8_G);

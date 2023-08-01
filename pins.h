@@ -6,7 +6,8 @@
 #define ENC2 32
 
 #define ENC_SELECT 33
-#define ENC_BACK 25
+#define BTN_BACK 25
+#define BTN_FORWARD 26
 
 #define FLEX1 36
 #define FLEX2 39
