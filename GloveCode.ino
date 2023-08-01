@@ -17,32 +17,84 @@
 
 /////////////////////////////
 // MAKE SURE THESE ARE SAME AS DRONE HAND CODE COPY PASTE
-#define DEVICE_NAME         "6a2017c6-d018-4930-8d1a-913289dfebf7"
+#define DEVICE_NAME         "MagicHands"
 #define SERVICE_UUID        "778f40a1-2937-4639-a10b-e0c112b04b0e"
 #define SERVO1_CHAR_UUID    "086bf84b-736f-45e0-8e35-6adcd6cc0ec4"
 #define SERVO2_CHAR_UUID    "f676b321-31a8-4179-8640-ce5699cf0721"
 #define SERVO3_CHAR_UUID    "c0b627e5-c0ce-4b5f-b590-a096c3514db7"
+#define DRONE_SERVICE_UUID  "6a2017c6-d018-4930-8d1a-913289dfebf7"
+#define DRONE_X_CHAR_UUID   "23312560-c77d-4022-90f0-341837850a5c"
+#define DRONE_Y_CHAR_UUID   "94fb83bb-6868-4945-b477-b510e27eeb31"
+#define DRONE_A_CHAR_UUID   "839f6d24-f852-405e-b4ee-5cf2e538eca2"
 // These are well-known UUIDs - don't change
-#define BATTERY_SERVICE 0x180F
-#define BATTERY_CHARACT 0x2A19 
+#define BATTERY_SERVICE BLEUUID((uint16_t)0x180F)
+#define BATTERY_CHARACT BLEUUID((uint16_t)0x2A19)
 /////////////////////////////
 
-static BLEUUID serviceUUID(SERVICE_UUID);
-static BLEUUID servo1CharacteristicUUID(SERVO1_CHAR_UUID);
-static BLEUUID servo2CharacteristicUUID(SERVO2_CHAR_UUID);
-static BLEUUID servo3CharacteristicUUID(SERVO3_CHAR_UUID);
-static BLEUUID batteryServiceUUID((uint16_t)BATTERY_SERVICE);
-static BLEUUID batteryCharacteristicUUID((uint16_t)BATTERY_CHARACT);
+// Forward declare
+class chooseWithService;
+bool connect();
+void startScan();
+Task* sendcontrolsTask;
+Task* draw_task;
+Task* btTask;
+Task* accelTask;
+Task* nav_calibrate_task;
+Task* battery_task;
+
 static BLERemoteCharacteristic* servo1Characteristic;
 static BLERemoteCharacteristic* servo2Characteristic;
 static BLERemoteCharacteristic* servo3Characteristic;
+static BLERemoteCharacteristic* droneXCharacteristic;
+static BLERemoteCharacteristic* droneYCharacteristic;
+static BLERemoteCharacteristic* droneACharacteristic;
 static BLEAdvertisedDevice* glove;
 
 Adafruit_MPU6050 imu;
 SF sensor_fusion;
 
+class CalibrateDoScreen: public CalibrateScreen {
+    public:
+    void button() override {
+        Serial.printf("Calibrate %s here\n", calib_options[this->calibrate_option]);
+        do_calibrate(this->calibrate_option);
+    }
+};
+
+bool hold = false;
+class HomeScreenActions: public HomeScreen {
+    public:
+    void button() override {
+        hold = !hold;
+        Serial.printf("Button on home screen, hold=%s (no actions)\n", hold ? "ON" : "OFF");
+    }
+    void up() override {
+        Serial.println("Up on home screen");
+    }
+    void down() override {
+        Serial.println("Down on home screen");
+    }
+    void drawMore() override {
+        Adafruit_SSD1306* d = this->screen;
+        // Draw bars to represent the servo positions
+        d->drawFastHLine(0, 25, map(pos1, 0, 180, 0, 24));
+        d->drawFastHLine(0, 26, map(pos2, 0, 180, 0, 24));
+        d->drawFastHLine(0, 27, map(pos3, 0, 180, 0, 24));
+        // Draw bars to represent the x and y
+        // TODO
+        // Display "HOLD" if on hold
+        if (!hold) return;
+        d->setTextColor(SSD1306_BLACK, SSD1306_WHITE);
+        d->setTextSize(2);
+        d->setCursor(26, 24);
+        d->print("HOLD");
+    }
+};
+
 Adafruit_SSD1306 display(128, 32, &SPI, OLED_DC, OLED_RESET, OLED_CS);
 ScreenManager screens(&display);
+HomeScreenActions homeScreen(&screens);
+CalibrateDoScreen calibScreen(&screens);
 
 ESP32Encoder selector;
 Bounce select_btn;
@@ -50,18 +102,6 @@ Bounce back;
 Bounce forward;
 
 SFE_MAX1704X battery(MAX1704X_MAX17048);
-
-// Forward declare
-class chooseWithService;
-bool connect();
-void startScan();
-Task* sendservoTask;
-Task* draw_task;
-Task* btTask;
-Task* accelTask;
-Task* nav_calibrate_task;
-Task* battery_task;
-
 
 bool oktoconnect = false;
 bool connected = false;
@@ -102,7 +142,7 @@ class whenDisconnect : public BLEClientCallbacks {
         delete glove;
         glove = NULL;
         btTask->running = true;
-        sendservoTask->running = false;
+        sendcontrolsTask->running = false;
         Serial.println("Re-scanning for devices after connection lost");
         startScan();
     }
@@ -120,18 +160,26 @@ bool connect() {
     client->connect(glove);
     client->setMTU(517); // maximum
     Serial.println("Called ->connect() returned");
-    BLERemoteService* service = client->getService(serviceUUID);
+    BLERemoteService* service = client->getService(SERVICE_UUID);
     if (service == NULL) goto error;
-    servo1Characteristic = service->getCharacteristic(servo1CharacteristicUUID);
-    servo2Characteristic = service->getCharacteristic(servo2CharacteristicUUID);
-    servo3Characteristic = service->getCharacteristic(servo3CharacteristicUUID);
+    servo1Characteristic = service->getCharacteristic(SERVO1_CHAR_UUID);
+    servo2Characteristic = service->getCharacteristic(SERVO2_CHAR_UUID);
+    servo3Characteristic = service->getCharacteristic(SERVO3_CHAR_UUID);
     if (servo1Characteristic == NULL) goto error;
     if (servo2Characteristic == NULL) goto error;
     if (servo3Characteristic == NULL) goto error;
+    BLERemoteService* dservice = client->getService(DRONE_SERVICE_UUID);
+    if (service == NULL) goto error;
+    droneXCharacteristic = dservice->getCharacteristic(DRONE_X_CHAR_UUID);
+    droneYCharacteristic = dservice->getCharacteristic(DRONE_Y_CHAR_UUID);
+    droneACharacteristic = dservice->getCharacteristic(DRONE_A_CHAR_UUID);
+    if (droneXCharacteristic == NULL) goto error;
+    if (droneYCharacteristic == NULL) goto error;
+    if (droneACharacteristic == NULL) goto error;
     // Get battery
-    bservice = client->getService(batteryServiceUUID);
+    bservice = client->getService(BATTERY_SERVICE);
     if (bservice == NULL) goto error;
-    bchar = bservice->getCharacteristic(batteryCharacteristicUUID);
+    bchar = bservice->getCharacteristic(BATTERY_CHARACT);
     if (bchar == NULL) goto error;
     bchar->registerForNotify(show_remote_battery);
     screen.set_conn_status(CONNECTED);
@@ -145,7 +193,6 @@ error:
 
 uint8_t pos1 = 0, pos2 = 0, pos3 = 0;
 
-
 TaskHandle_t btTaskHandle;
 
 void runBtTask(void* arg) {
@@ -156,50 +203,15 @@ void runBtTask(void* arg) {
     }
 }
 void startBtTask() {
-    sendservoTask->running = false;
+    sendcontrolsTask->running = false;
     xTaskCreatePinnedToCore(runBtTask, "bluetoothTaskLoop", 8192, NULL, 0, &btTaskHandle, 0);
 }
-
-class CalibrateDoScreen: public CalibrateScreen {
-    public:
-    void button() override {
-        Serial.printf("Calibrate %s here\n", calib_options[this->calibrate_option]);
-        do_calibrate(this->calibrate_option);
-    }
-};
-
-bool hold = false;
-class HomeScreenActions: public HomeScreen {
-    public:
-    void button() override {
-        hold = !hold;
-        Serial.printf("Button on home screen, hold=%s (no actions)\n", hold ? "ON" : "OFF");
-    }
-    void up() override {
-        Serial.println("Up on home screen");
-    }
-    void down() override {
-        Serial.println("Down on home screen");
-    }
-    void drawMore() override {
-        // Draw bars to represent the servo positions
-        display.drawFastHLine(0, 25, map(pos1, 0, 180, 0, 24));
-        display.drawFastHLine(0, 26, map(pos2, 0, 180, 0, 24));
-        display.drawFastHLine(0, 27, map(pos3, 0, 180, 0, 24));
-        // Display "HOLD" if on hold
-        if (!this->hold) return;
-        display.setTextColor(SSD1306_BLACK, SSD1306_WHITE);
-        display.setTextSize(2);
-        display.setCursor(26, 24);
-        display.print("HOLD");
-    }
-};
 
 void setup() {
     btTask = new Task("bluetooth", 0, NULL, [](void* arg) -> void {
         if (oktoconnect && !connected) {
             connected = connect();
-            sendservoTask->running = connected;
+            sendcontrolsTask->running = connected;
             btTask->running = !connected;
         }
     });
@@ -231,7 +243,7 @@ void setup() {
         screens.draw();
     });
 
-    sendservoTask = new Task("sendservoTask", 5, NULL, [](void* arg) -> void {
+    sendcontrolsTask = new Task("sendcontrolsTask", 5, NULL, [](void* arg) -> void {
         if (hold) return;
         // TODO: make this more DRY
         uint16_t analog1 = analogRead(FLEX1);
@@ -249,6 +261,15 @@ void setup() {
         if (oic1.didChange(pos1)) servo1Characteristic->writeValue(pos1);
         if (oic2.didChange(pos2)) servo2Characteristic->writeValue(pos2);
         if (oic3.didChange(pos3)) servo3Characteristic->writeValue(pos3);
+        // Send drone command values
+        int rawX = (int)sensor_fusion.getPitch();
+        int rawY = (int)sensor_fusion.getRoll();
+        int8_t x = (int8_t)rawX;
+        int8_t y = (int8_t)rawY;
+        static OIC<8, 1000> oicX;
+        static OIC<8, 1000> oicY;
+        if (oicX.didChange(x)) droneXCharacteristic->writeValue(x);
+        if (oicY.didChange(y)) droneXCharacteristic->writeValue(y);
     });
 
     battery_task = new Task("battery", 500, NULL, [](void* arg) -> void {
@@ -278,11 +299,11 @@ void setup() {
     back.interval(50);
     forward.interval(50);
 
-    // Start LCD
+    // Start OLED
     display.begin(SSD1306_SWITCHCAPVCC);
     display.display();
-    screens.addScreen(new HomeScreenActions(&screens));
-    screens.addScreen(new CalibrateDoScreen(&screens));
+    screens.addScreen(&homeScreen);
+    screens.addScreen(&calibScreen);
     screens.begin();
 
     // Configure IMU
@@ -299,6 +320,6 @@ void loop() {
     accelTask->run();
     nav_calibrate_task->run();
     draw_task->run();
-    sendservoTask->run();
+    sendcontrolsTask->run();
     yield();
 }
