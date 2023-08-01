@@ -1,4 +1,4 @@
-
+#include "pins.h"
 #include <SPI.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
@@ -41,23 +41,12 @@ static BLEAdvertisedDevice* glove;
 Adafruit_MPU6050 imu;
 SF sensor_fusion;
 
-#define OLED_DC     16
-#define OLED_CS     17
-#define OLED_RESET  4
 Adafruit_SSD1306 display(128, 32, &SPI, OLED_DC, OLED_RESET, OLED_CS);
 Screen screen(&display);
 
 ESP32Encoder selector;
-#define ENC1 35
-#define ENC2 32
 Bounce select_btn;
 Bounce back;
-#define ENC_SELECT 33
-#define ENC_BACK 25
-
-#define FLEX1 36
-#define FLEX2 39
-#define FLEX3 34
 
 SFE_MAX1704X battery(MAX1704X_MAX17048);
 
