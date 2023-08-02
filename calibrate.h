@@ -53,10 +53,11 @@ void setup_calibrate(int finger1Pin, int finger2Pin, int finger3Pin, Adafruit_MP
 
 void do_calibrate(int what) {
     if (what == 0) {
-        accel_calibrate->reset();
-        accel_calibrate->setAccelerometerRange(MPU6050_RANGE_8_G);
-        accel_calibrate->setGyroRange(MPU6050_RANGE_500_DEG);
-        accel_calibrate->setFilterBandwidth(MPU6050_BAND_21_HZ);
+        // Don't brick the accelerometer
+//        accel_calibrate->reset();
+//        accel_calibrate->setAccelerometerRange(MPU6050_RANGE_8_G);
+//        accel_calibrate->setGyroRange(MPU6050_RANGE_500_DEG);
+//        accel_calibrate->setFilterBandwidth(MPU6050_BAND_21_HZ);
         return;
     }
     static const int what_pin[] = {-1, 0, 0, 1, 1, 2, 2};

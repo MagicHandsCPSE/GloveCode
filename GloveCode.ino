@@ -19,13 +19,9 @@
 // MAKE SURE THESE ARE SAME AS DRONE HAND CODE COPY PASTE
 #define DEVICE_NAME         "MagicHands"
 #define SERVICE_UUID        "778f40a1-2937-4639-a10b-e0c112b04b0e"
-#define SERVO1_CHAR_UUID    "086bf84b-736f-45e0-8e35-6adcd6cc0ec4"
-#define SERVO2_CHAR_UUID    "f676b321-31a8-4179-8640-ce5699cf0721"
-#define SERVO3_CHAR_UUID    "c0b627e5-c0ce-4b5f-b590-a096c3514db7"
+#define SERVO_CHAR_UUID     "086bf84b-736f-45e0-8e35-6adcd6cc0ec4"
 #define DRONE_SERVICE_UUID  "6a2017c6-d018-4930-8d1a-913289dfebf7"
-#define DRONE_X_CHAR_UUID   "23312560-c77d-4022-90f0-341837850a5c"
-#define DRONE_Y_CHAR_UUID   "94fb83bb-6868-4945-b477-b510e27eeb31"
-#define DRONE_A_CHAR_UUID   "839f6d24-f852-405e-b4ee-5cf2e538eca2"
+#define DRONE_CHAR_UUID     "23312560-c77d-4022-90f0-341837850a5c"
 // These are well-known UUIDs - don't change
 #define BATTERY_SERVICE BLEUUID((uint16_t)0x180F)
 #define BATTERY_CHARACT BLEUUID((uint16_t)0x2A19)
@@ -42,19 +38,18 @@ Task* accelTask;
 Task* nav_calibrate_task;
 Task* battery_task;
 
-static BLERemoteCharacteristic* servo1Characteristic;
-static BLERemoteCharacteristic* servo2Characteristic;
-static BLERemoteCharacteristic* servo3Characteristic;
-static BLERemoteCharacteristic* droneXCharacteristic;
-static BLERemoteCharacteristic* droneYCharacteristic;
-static BLERemoteCharacteristic* droneACharacteristic;
+uint8_t pos1 = 0, pos2 = 0, pos3 = 0;
+
+static BLERemoteCharacteristic* servoCharacteristic;
+static BLERemoteCharacteristic* droneCharacteristic;
 static BLEAdvertisedDevice* glove;
 
 Adafruit_MPU6050 imu;
 SF sensor_fusion;
 
-class CalibrateDoScreen: public CalibrateScreen {
+class CalibrateDoScreen: public CalibScreen {
     public:
+    using CalibScreen::CalibScreen;
     void button() override {
         Serial.printf("Calibrate %s here\n", calib_options[this->calibrate_option]);
         do_calibrate(this->calibrate_option);
@@ -64,6 +59,7 @@ class CalibrateDoScreen: public CalibrateScreen {
 bool hold = false;
 class HomeScreenActions: public HomeScreen {
     public:
+    using HomeScreen::HomeScreen;
     void button() override {
         hold = !hold;
         Serial.printf("Button on home screen, hold=%s (no actions)\n", hold ? "ON" : "OFF");
@@ -77,16 +73,15 @@ class HomeScreenActions: public HomeScreen {
     void drawMore() override {
         Adafruit_SSD1306* d = this->screen;
         // Draw bars to represent the servo positions
-        d->drawFastHLine(0, 25, map(pos1, 0, 180, 0, 24));
-        d->drawFastHLine(0, 26, map(pos2, 0, 180, 0, 24));
-        d->drawFastHLine(0, 27, map(pos3, 0, 180, 0, 24));
+        d->drawFastHLine(0, 25, map(pos1, 0, 180, 0, 24), SSD1306_WHITE);
+        d->drawFastHLine(0, 26, map(pos2, 0, 180, 0, 24), SSD1306_WHITE);
+        d->drawFastHLine(0, 27, map(pos3, 0, 180, 0, 24), SSD1306_WHITE);
         // Draw bars to represent the x and y
         // TODO
         // Display "HOLD" if on hold
         if (!hold) return;
-        d->setTextColor(SSD1306_BLACK, SSD1306_WHITE);
         d->setTextSize(2);
-        d->setCursor(26, 24);
+        d->setCursor(70, 16);
         d->print("HOLD");
     }
 };
@@ -108,7 +103,7 @@ bool connected = false;
 
 class chooseWithService : public BLEAdvertisedDeviceCallbacks {
     void onResult(BLEAdvertisedDevice device) {
-        if (device.haveServiceUUID() && device.isAdvertisingService(serviceUUID)) {
+        if (device.haveServiceUUID() && device.isAdvertisingService(BLEUUID(SERVICE_UUID))) {
             BLEDevice::getScan()->stop();
             glove = new BLEAdvertisedDevice(device);
             oktoconnect = true;
@@ -117,13 +112,13 @@ class chooseWithService : public BLEAdvertisedDeviceCallbacks {
 };
 
 void show_remote_battery(BLERemoteCharacteristic* characteristic, uint8_t* data, size_t len, bool notify) {
-    screen.set_d_battery(*data);
+    homeScreen.d_battery = *data;
 }
 
 void dummy(BLEScanResults _) {}
 
 void startScan() {
-    screen.set_conn_status(SCANNING);
+    homeScreen.status = SCANNING;
     BLEDevice::init("");
     BLEScan* scan = BLEDevice::getScan();
     scan->setAdvertisedDeviceCallbacks(new chooseWithService());
@@ -151,8 +146,9 @@ class whenDisconnect : public BLEClientCallbacks {
 bool connect() {
     BLERemoteService* bservice;
     BLERemoteCharacteristic* bchar;
+    BLERemoteService* dservice;
     Serial.println("called connect()");
-    screen.set_conn_status(CONNECTING);
+    homeScreen.status = CONNECTING;
     Serial.println("calling create client");
     BLEClient* client = BLEDevice::createClient();
     client->setClientCallbacks(new whenDisconnect());
@@ -161,37 +157,45 @@ bool connect() {
     client->setMTU(517); // maximum
     Serial.println("Called ->connect() returned");
     BLERemoteService* service = client->getService(SERVICE_UUID);
-    if (service == NULL) goto error;
-    servo1Characteristic = service->getCharacteristic(SERVO1_CHAR_UUID);
-    servo2Characteristic = service->getCharacteristic(SERVO2_CHAR_UUID);
-    servo3Characteristic = service->getCharacteristic(SERVO3_CHAR_UUID);
-    if (servo1Characteristic == NULL) goto error;
-    if (servo2Characteristic == NULL) goto error;
-    if (servo3Characteristic == NULL) goto error;
-    BLERemoteService* dservice = client->getService(DRONE_SERVICE_UUID);
-    if (service == NULL) goto error;
-    droneXCharacteristic = dservice->getCharacteristic(DRONE_X_CHAR_UUID);
-    droneYCharacteristic = dservice->getCharacteristic(DRONE_Y_CHAR_UUID);
-    droneACharacteristic = dservice->getCharacteristic(DRONE_A_CHAR_UUID);
-    if (droneXCharacteristic == NULL) goto error;
-    if (droneYCharacteristic == NULL) goto error;
-    if (droneACharacteristic == NULL) goto error;
+    if (service == NULL) {
+        Serial.println("failed to find servo service");
+        goto error;
+    }
+    servoCharacteristic = service->getCharacteristic(SERVO_CHAR_UUID);
+    if (servoCharacteristic == NULL) {
+        Serial.println("failed to find servo char");
+        goto error;
+    }
+    dservice = client->getService(DRONE_SERVICE_UUID);
+    if (dservice == NULL) {
+        Serial.println("failed to find drone service");
+        goto error;
+    }
+    droneCharacteristic = dservice->getCharacteristic(DRONE_CHAR_UUID);
+    if (droneCharacteristic == NULL) {
+        Serial.println("failed to find drone char");
+        goto error;
+    }
     // Get battery
     bservice = client->getService(BATTERY_SERVICE);
-    if (bservice == NULL) goto error;
+    if (bservice == NULL) {
+        Serial.println("failed to find battery service");
+        goto error;
+    }
     bchar = bservice->getCharacteristic(BATTERY_CHARACT);
-    if (bchar == NULL) goto error;
+    if (bchar == NULL) {
+        Serial.println("failed to find battery char");
+        goto error;
+    }
     bchar->registerForNotify(show_remote_battery);
-    screen.set_conn_status(CONNECTED);
+    homeScreen.status = CONNECTED;
     return true;
 error:
     client->disconnect();
-    screen.set_conn_status(ERROR);
+    homeScreen.status = ERROR;
     return false;
 }
 
-
-uint8_t pos1 = 0, pos2 = 0, pos3 = 0;
 
 TaskHandle_t btTaskHandle;
 
@@ -258,9 +262,11 @@ void setup() {
         static OIC<16, 200> oic1;
         static OIC<16, 200> oic2;
         static OIC<16, 200> oic3;
-        if (oic1.didChange(pos1)) servo1Characteristic->writeValue(pos1);
-        if (oic2.didChange(pos2)) servo2Characteristic->writeValue(pos2);
-        if (oic3.didChange(pos3)) servo3Characteristic->writeValue(pos3);
+        int pack = (pos1 << 16) | (pos2 << 8) | pos3;
+        if (oic1.didChange(pos1) || oic2.didChange(pos2) || oic3.didChange(pos3)) {
+            servoCharacteristic->writeValue((uint8_t*)&pack, 4, false);
+            Serial.printf("Sent %#x to servo control\n", pack);
+        }
         // Send drone command values
         int rawX = (int)sensor_fusion.getPitch();
         int rawY = (int)sensor_fusion.getRoll();
@@ -268,13 +274,16 @@ void setup() {
         int8_t y = (int8_t)rawY;
         static OIC<8, 1000> oicX;
         static OIC<8, 1000> oicY;
-        if (oicX.didChange(x)) droneXCharacteristic->writeValue(x);
-        if (oicY.didChange(y)) droneXCharacteristic->writeValue(y);
+        pack = ((*(uint8_t*)&x) << 16) | ((*(uint8_t*)&y) << 8) | 0;
+        if (oicX.didChange(x) || oicY.didChange(y)) {
+            droneCharacteristic->writeValue((uint8_t*)&pack, 4, false);
+            Serial.printf("Sent %#x to drone control\n", pack);
+        }
     });
 
     battery_task = new Task("battery", 500, NULL, [](void* arg) -> void {
         int percent = (int)battery.getSOC();
-        screen.set_g_battery(percent);
+        homeScreen.g_battery = percent;
     });
     
     Serial.begin(115200);
@@ -287,7 +296,7 @@ void setup() {
         battery.reset();
         battery.quickStart();
     } else {
-        screen.set_g_battery(-2);
+        homeScreen.g_battery = -2;
     }
     
     selector.attachSingleEdge(ENC1, ENC2);

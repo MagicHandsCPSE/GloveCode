@@ -19,13 +19,37 @@ const size_t num_options = sizeof(calib_options) / sizeof(calib_options[0]);
 
 enum bt_status { SCANNING, CONNECTING, CONNECTED, ERROR };
 
-class ScreenManager;
+class Screen;
+class ScreenManager {
+    public:
+    std::vector<Screen*> screens;
+    size_t index = 0;
+    Adafruit_SSD1306* display;
+    ScreenManager(Adafruit_SSD1306* screen): display(screen) {}
+    void begin() {
+        this->display->cp437(true);
+    }
+    void addScreen(Screen* screen) {
+        this->screens.push_back(screen);
+    }
+    void nextScreen() {
+        this->index = (this->index + 1) % this->screens.size();
+    }
+    void prevScreen() {
+        this->index = (this->index + this->screens.size() - 1) % this->screens.size();
+    }
+    Screen* activeScreen() { return this->screens[this->index]; }
+    void button();
+    void up();
+    void down();
+    void draw();
+};
 
 class Screen {
     public:
     Adafruit_SSD1306* screen;
-    ScreenManager controller;
-    Screen(ScreenManager* manager): screen(manager->screen), controller(manager) {}
+    ScreenManager* controller;
+    Screen(ScreenManager* manager): screen(manager->display), controller(manager) {}
     virtual void draw() {}
     virtual void button() {}
     virtual void up() {}
@@ -34,6 +58,7 @@ class Screen {
 
 class HomeScreen: public Screen {
     public:
+    using Screen::Screen;
     bt_status status = SCANNING;
     int g_battery = -1;
     int d_battery = -1;
@@ -87,10 +112,10 @@ class HomeScreen: public Screen {
 
 class CalibScreen: public Screen {
     public:
+    using Screen::Screen;
     int calibrate_option = 0;
     int scroll_amount = 0;
     void scroll(int8_t dir) {
-        if (this->onHome) return;
         if ((dir < 0 && this->calibrate_option > -dir - 1) || (dir > 0 && this->calibrate_option < num_options - dir)) this->calibrate_option += dir;
         if (this->calibrate_option - this->scroll_amount > 2) this->scroll_amount = this->calibrate_option - 2;
         if (this->scroll_amount - this->calibrate_option > 0) this->scroll_amount = this->calibrate_option;
@@ -110,37 +135,17 @@ class CalibScreen: public Screen {
     }
 };
 
-class ScreenManager {
-    public:
-    std::vector<Screen*> screens;
-    size_t index = 0;
-    Adafruit_SSD1306* display;
-    ScreenManager(Adafruit_SSD1306* screen): display(screen) {}
-    void begin() {
-        this->display->cp437(true);
-    }
-    void addScreen(Screen* screen) {
-        this->screens.push_back(screen);
-    }
-    void nextScreen() {
-        this->index = (this->index + 1) % this->screens.size();
-    }
-    void prevScreen() {
-        this->index = (this->index + this->screens.size() - 1) % this->screens.size();
-    }
-    Screen* activeScreen() { return this->screens[this->index]; }
-    void button() { this->activeScreen()->button(); }
-    void up() { this->activeScreen()->up(); }
-    void down() { this->activeScreen()->down(); }
-    void draw() {
-        Adafruit_SSD1306* d = this->display;
-        d->setTextSize(1);
-        d->setCursor(0, 0);
-        d->setTextColor(SSD1306_WHITE);
-        d->clearDisplay();
-        this->activeScreen()->draw();
-        d->display();
-    }
+void ScreenManager::button() { this->activeScreen()->button(); }
+void ScreenManager::up() { this->activeScreen()->up(); }
+void ScreenManager::down() { this->activeScreen()->down(); }
+void ScreenManager::draw() {
+    Adafruit_SSD1306* d = this->display;
+    d->setTextSize(1);
+    d->setCursor(0, 0);
+    d->setTextColor(SSD1306_WHITE);
+    d->clearDisplay();
+    this->activeScreen()->draw();
+    d->display();
 }
 
 #endif
