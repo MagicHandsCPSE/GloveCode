@@ -238,7 +238,7 @@ void setup() {
         sensors_event_t a, g, trash;
         imu.getEvent(&a, &g, &trash);
         (void)trash;
-        sensor_fusion.MahonyUpdate(
+        sensor_fusion.MadgwickUpdate(
             g.gyro.x, g.gyro.y, g.gyro.z,
             a.acceleration.x, a.acceleration.y, a.acceleration.z,
             sensor_fusion.deltatUpdate());
