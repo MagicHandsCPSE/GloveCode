@@ -57,27 +57,40 @@ class CalibrateDoScreen: public CalibScreen {
 };
 
 bool hold = false;
+int droneAltThrust = 0;
 class HomeScreenActions: public HomeScreen {
     public:
     using HomeScreen::HomeScreen;
     void button() override {
         hold = !hold;
-        Serial.printf("Button on home screen, hold=%s (no actions)\n", hold ? "ON" : "OFF");
+        Serial.printf("Button on home screen, hold=%s\n", hold ? "ON" : "OFF");
     }
     void up() override {
         Serial.println("Up on home screen");
+        droneAltThrust = 1;
     }
     void down() override {
         Serial.println("Down on home screen");
+        droneAltThrust = -1;
     }
     void drawMore() override {
         Adafruit_SSD1306* d = this->screen;
         // Draw bars to represent the servo positions
-        d->drawFastHLine(0, 25, map(pos1, 0, 180, 0, 24), SSD1306_WHITE);
-        d->drawFastHLine(0, 26, map(pos2, 0, 180, 0, 24), SSD1306_WHITE);
-        d->drawFastHLine(0, 27, map(pos3, 0, 180, 0, 24), SSD1306_WHITE);
+        d->drawFastHLine(0, 25, map(pos1, 0, 180, 0, 60), SSD1306_WHITE);
+        d->drawFastHLine(0, 26, map(pos2, 0, 180, 0, 60), SSD1306_WHITE);
+        d->drawFastHLine(0, 27, map(pos3, 0, 180, 0, 60), SSD1306_WHITE);
         // Draw bars to represent the x and y
-        // TODO
+        static int xs;
+        static int ys;
+        if (!hold) xs = (int)sensor_fusion.getPitch(), ys = (int)sensor_fusion.getRoll();
+        int mx = map(xs, -90, 90, -30, 30);
+        int my = map(ys, -90, 90, -30, 30);
+        int ax = abs(mx);
+        int ay = abs(my);
+        int sx = mx < 0 ? 30 - mx : 30;
+        int sy = my < 0 ? 30 - my : 30;
+        d->drawFastHLine(sx, 29, mx, SSD1306_WHITE);
+        d->drawFastHLine(sy, 30, my, SSD1306_WHITE);
         // Display "HOLD" if on hold
         if (!hold) return;
         d->setTextSize(2);
@@ -275,7 +288,9 @@ void setup() {
         int8_t y = (int8_t)rawY;
         static OIC<8, 1000> oicX;
         static OIC<8, 1000> oicY;
-        pack = ((*(uint8_t*)&x) << 16) | ((*(uint8_t*)&y) << 8) | 0;
+        int8_t droneA = (int8_t)droneAltThrust;
+        droneAltThrust = 0;
+        pack = ((*(uint8_t*)&x) << 16) | ((*(uint8_t*)&y) << 8) | (*(uint8_t*)&droneA);
         if (oicX.didChange(x) || oicY.didChange(y)) {
             droneCharacteristic->writeValue((uint8_t*)&pack, 4, false);
             //Serial.printf("Sent %#x to drone control\n", pack);
@@ -287,7 +302,7 @@ void setup() {
         Serial.printf("Battery: %i\n", percent);
         homeScreen.g_battery = percent;
     });
-    
+
     Serial.begin(115200);
     Wire.begin();
     // Connect IMU
@@ -302,7 +317,7 @@ void setup() {
         homeScreen.g_battery = -2;
         Serial.println("No battery ??");
     }
-    
+
     selector.attachSingleEdge(ENC1, ENC2);
     selector.setFilter(1023);
     select_btn.attach(ENC_SELECT, INPUT);
