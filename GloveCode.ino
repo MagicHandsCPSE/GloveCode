@@ -138,6 +138,7 @@ class whenDisconnect : public BLEClientCallbacks {
         glove = NULL;
         btTask->running = true;
         sendcontrolsTask->running = false;
+        homeScreen.d_battery = -1; // ?'s
         Serial.println("Re-scanning for devices after connection lost");
         startScan();
     }
@@ -265,7 +266,7 @@ void setup() {
         int pack = (pos1 << 16) | (pos2 << 8) | pos3;
         if (oic1.didChange(pos1) || oic2.didChange(pos2) || oic3.didChange(pos3)) {
             servoCharacteristic->writeValue((uint8_t*)&pack, 4, false);
-            Serial.printf("Sent %#x to servo control\n", pack);
+            //Serial.printf("Sent %#x to servo control\n", pack);
         }
         // Send drone command values
         int rawX = (int)sensor_fusion.getPitch();
@@ -277,16 +278,18 @@ void setup() {
         pack = ((*(uint8_t*)&x) << 16) | ((*(uint8_t*)&y) << 8) | 0;
         if (oicX.didChange(x) || oicY.didChange(y)) {
             droneCharacteristic->writeValue((uint8_t*)&pack, 4, false);
-            Serial.printf("Sent %#x to drone control\n", pack);
+            //Serial.printf("Sent %#x to drone control\n", pack);
         }
     });
 
     battery_task = new Task("battery", 500, NULL, [](void* arg) -> void {
         int percent = (int)battery.getSOC();
+        Serial.printf("Battery: %i\n", percent);
         homeScreen.g_battery = percent;
     });
     
     Serial.begin(115200);
+    Wire.begin();
     // Connect IMU
     imu.begin();
 
@@ -297,6 +300,7 @@ void setup() {
         battery.quickStart();
     } else {
         homeScreen.g_battery = -2;
+        Serial.println("No battery ??");
     }
     
     selector.attachSingleEdge(ENC1, ENC2);
@@ -330,5 +334,6 @@ void loop() {
     nav_calibrate_task->run();
     draw_task->run();
     sendcontrolsTask->run();
+    battery_task->run();
     yield();
 }
