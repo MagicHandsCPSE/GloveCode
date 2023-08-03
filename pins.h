@@ -2,8 +2,8 @@
 #define OLED_CS     16
 #define OLED_RESET  4
 
-#define ENC1 35
-#define ENC2 32
+#define ENC1 32
+#define ENC2 35
 
 #define ENC_SELECT 33
 #define BTN_BACK 25
