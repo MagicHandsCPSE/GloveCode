@@ -125,7 +125,7 @@ class chooseWithService : public BLEAdvertisedDeviceCallbacks {
 };
 
 void show_remote_battery(BLERemoteCharacteristic* characteristic, uint8_t* data, size_t len, bool notify) {
-    homeScreen.d_battery = *data;
+    homeScreen.d_battery = (int)(*data);
 }
 
 void dummy(BLEScanResults _) {}
