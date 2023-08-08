@@ -82,7 +82,7 @@ class HomeScreen: public Screen {
         else d->printf("%3i%%", this->d_battery);
         if (this->d_battery > 0 && this->d_battery < 10) {
             d->setTextColor(SSD1306_BLACK, SSD1306_WHITE); // Draw 'inverse' text
-            d->print(blink ? "\x13\x13\x13" : "LOW");
+            d->print(blink ? "!!!" : "LOW");
             d->setTextColor(SSD1306_WHITE);
         }
         d->println();
