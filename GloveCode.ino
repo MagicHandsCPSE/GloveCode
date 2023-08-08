@@ -288,10 +288,11 @@ void setup() {
         int8_t y = (int8_t)rawY;
         static OIC<8, 1000> oicX;
         static OIC<8, 1000> oicY;
+        static OIC<8, 1000> oicA;
         int8_t droneA = (int8_t)droneAltThrust;
         droneAltThrust = 0;
         pack = ((*(uint8_t*)&x) << 16) | ((*(uint8_t*)&y) << 8) | (*(uint8_t*)&droneA);
-        if (oicX.didChange(x) || oicY.didChange(y)) {
+        if (oicX.didChange(x) || oicY.didChange(y) || oicA.didChange(droneA)) {
             droneCharacteristic->writeValue((uint8_t*)&pack, 4, false);
             //Serial.printf("Sent %#x to drone control\n", pack);
         }
