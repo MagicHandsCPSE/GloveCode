@@ -85,12 +85,10 @@ class HomeScreenActions: public HomeScreen {
         if (!hold) xs = (int)sensor_fusion.getPitch(), ys = (int)sensor_fusion.getRoll();
         int mx = map(xs, -90, 90, -30, 30);
         int my = map(ys, -90, 90, -30, 30);
-        int ax = abs(mx);
-        int ay = abs(my);
-        int sx = mx < 0 ? 30 - mx : 30;
-        int sy = my < 0 ? 30 - my : 30;
-        d->drawFastHLine(sx, 29, mx, SSD1306_WHITE);
-        d->drawFastHLine(sy, 30, my, SSD1306_WHITE);
+        int sx = mx < 0 ? 30 + mx : 30;
+        int sy = my < 0 ? 30 + my : 30;
+        d->drawFastHLine(sx, 29, abs(mx), SSD1306_WHITE);
+        d->drawFastHLine(sy, 30, abs(my), SSD1306_WHITE);
         // Display "HOLD" if on hold
         if (!hold) return;
         d->setTextSize(2);
