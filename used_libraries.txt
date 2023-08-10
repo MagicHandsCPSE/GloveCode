@@ -1,0 +1,5 @@
+Adafruit_SSD1306 (https://github.com/adafruit/Adafruit_SSD1306)
+SensorFusion (https://github.com/aster94/SensorFusion)
+ESP32Encoder (https://github.com/madhephaestus/ESP32Encoder)
+Bounce2 (https://github.com/thomasfredericks/Bounce2)
+SparkFun MAX1704x (https://github.com/sparkfun/SparkFun_MAX1704x_Fuel_Gauge_Arduino_Library)
